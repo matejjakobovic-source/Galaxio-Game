@@ -1,0 +1,105 @@
+class_name GravityPlanet
+extends CharacterBody2D
+
+var gravity_direction := 1.0
+var gravity_strength := 2350.0
+var max_vertical_speed := 1450.0
+var active := false
+var shield_charges := 0
+var skin_id := "terra"
+var pulse := 0.0
+
+const SKINS := {
+    "terra": {"base": Color("4ad5ff"), "accent": Color("66ff9a")},
+    "mars": {"base": Color("ff765f"), "accent": Color("ffcf7c")},
+    "neon": {"base": Color("c55cff"), "accent": Color("34f5ff")},
+    "saturn": {"base": Color("f8d88b"), "accent": Color("c49cff")},
+    "void": {"base": Color("35335c"), "accent": Color("ff4ecb")},
+    "sun": {"base": Color("ffb22e"), "accent": Color("fff18b")},
+    "ice": {"base": Color("b8f6ff"), "accent": Color("6ea8ff")},
+    "toxic": {"base": Color("9dff4f"), "accent": Color("ffe64f")}
+}
+
+func _ready() -> void:
+    collision_layer = 1
+    collision_mask = 0
+    var shape_node := CollisionShape2D.new()
+    var circle := CircleShape2D.new()
+    circle.radius = 42.0
+    shape_node.shape = circle
+    add_child(shape_node)
+    queue_redraw()
+
+func reset(start_pos: Vector2, new_skin: String) -> void:
+    global_position = start_pos
+    velocity = Vector2.ZERO
+    gravity_direction = 1.0
+    shield_charges = 0
+    active = true
+    skin_id = new_skin
+    pulse = 0.0
+    visible = true
+    queue_redraw()
+
+func set_gravity(direction: float) -> void:
+    if not active:
+        return
+    var d := signf(direction)
+    if d == 0.0:
+        return
+    gravity_direction = d
+    velocity.y = velocity.y * 0.42 + gravity_direction * 155.0
+    pulse = 1.0
+    queue_redraw()
+
+func toggle_gravity() -> void:
+    set_gravity(-gravity_direction)
+
+func add_shield() -> void:
+    shield_charges = 1
+    pulse = 1.0
+    queue_redraw()
+
+func consume_shield() -> bool:
+    if shield_charges <= 0:
+        return false
+    shield_charges -= 1
+    pulse = 1.0
+    queue_redraw()
+    return true
+
+func _physics_process(delta: float) -> void:
+    if not active:
+        return
+    velocity.x = 0.0
+    velocity.y += gravity_direction * gravity_strength * delta
+    velocity.y = clampf(velocity.y, -max_vertical_speed, max_vertical_speed)
+    move_and_slide()
+    global_position.x = 220.0
+    pulse = maxf(0.0, pulse - delta * 2.8)
+    if pulse > 0.0:
+        queue_redraw()
+
+func _draw() -> void:
+    var skin: Dictionary = SKINS.get(skin_id, SKINS["terra"])
+    var base: Color = skin["base"]
+    var accent: Color = skin["accent"]
+    var glow_r := 52.0 + pulse * 8.0
+    draw_circle(Vector2.ZERO, glow_r, Color(accent, 0.10 + pulse * 0.08))
+    draw_circle(Vector2.ZERO, 42.0, base)
+    draw_circle(Vector2(-13.0, -11.0), 13.0, Color(accent, 0.82))
+    draw_circle(Vector2(15.0, 8.0), 9.0, Color(accent, 0.55))
+    draw_arc(Vector2.ZERO, 34.0, -2.4, -0.5, 22, Color(1, 1, 1, 0.46), 4.0)
+    if skin_id == "saturn":
+        draw_arc(Vector2.ZERO, 58.0, -0.25, 3.0, 40, accent, 7.0)
+        draw_arc(Vector2.ZERO, 58.0, 3.0, 6.0, 40, Color(accent, 0.42), 5.0)
+    elif skin_id == "void":
+        draw_circle(Vector2.ZERO, 19.0, Color("090816"))
+        draw_arc(Vector2.ZERO, 27.0, 0.0, TAU, 42, accent, 5.0)
+    elif skin_id == "sun":
+        for i in range(12):
+            var a := TAU * float(i) / 12.0
+            draw_line(Vector2(cos(a), sin(a)) * 48.0, Vector2(cos(a), sin(a)) * 60.0, accent, 4.0)
+    if shield_charges > 0:
+        draw_arc(Vector2.ZERO, 59.0, 0.0, TAU, 64, Color("76f7ff"), 6.0)
+        draw_arc(Vector2.ZERO, 66.0, -0.7, 1.3, 18, Color(1, 1, 1, 0.65), 3.0)
