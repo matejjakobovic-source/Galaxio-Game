@@ -21,7 +21,21 @@ jobs:
           include-templates: false
 
       - name: Import project and validate scripts
-        run: godot --headless --path . --editor --quit
+        shell: bash
+        run: |
+          set -o pipefail
+          godot --headless --path . --editor --quit 2>&1 | tee godot-import.log
+          if grep -E "SCRIPT ERROR|ERROR:" godot-import.log; then
+            echo "Godot reported import or script errors."
+            exit 1
+          fi
 
       - name: Smoke-run main scene
-        run: godot --headless --path . --quit-after 5
+        shell: bash
+        run: |
+          set -o pipefail
+          godot --headless --path . --quit-after 5 2>&1 | tee godot-smoke.log
+          if grep -E "SCRIPT ERROR|ERROR:" godot-smoke.log; then
+            echo "Godot reported runtime errors."
+            exit 1
+          fi

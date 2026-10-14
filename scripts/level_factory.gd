@@ -10,22 +10,22 @@ static func build_level(requested_level: int) -> Dictionary:
 
 	var difficulty := float(level - 1) / float(TOTAL_LEVELS - 1)
 	var segment_count := 10 + int(floor(float(level - 1) / 8.0))
-	var gap_size := lerp(520.0, 300.0, difficulty)
-	var base_speed := lerp(350.0, 640.0, difficulty)
+	var gap_size: float = lerpf(520.0, 300.0, difficulty)
+	var base_speed: float = lerpf(350.0, 640.0, difficulty)
 	var segments: Array = []
 	var last_y := 960.0
 
 	for i in range(segment_count):
-		var max_shift := lerp(300.0, 510.0, difficulty)
-		var target_y := clamp(last_y + rng.randf_range(-max_shift, max_shift), 390.0, 1530.0)
+		var max_shift: float = lerpf(300.0, 510.0, difficulty)
+		var target_y: float = clampf(last_y + rng.randf_range(-max_shift, max_shift), 390.0, 1530.0)
 		if i < 2:
-			target_y = lerp(960.0, target_y, float(i + 1) / 3.0)
+			target_y = lerpf(960.0, target_y, float(i + 1) / 3.0)
 		last_y = target_y
 
-		var moving := level >= 14 and i > 1 and rng.randf() < lerp(0.08, 0.46, difficulty)
+		var moving: bool = level >= 14 and i > 1 and rng.randf() < lerpf(0.08, 0.46, difficulty)
 		var move_amplitude := 0.0
 		if moving:
-			move_amplitude = rng.randf_range(70.0, lerp(120.0, 230.0, difficulty))
+			move_amplitude = rng.randf_range(70.0, lerpf(120.0, 230.0, difficulty))
 
 		var powerup := ""
 		if i > 1 and i % 5 == 0 and rng.randf() < 0.72:
@@ -55,10 +55,10 @@ static func build_level(requested_level: int) -> Dictionary:
 static func build_endless_segment(index: int, seed_value: int = 44119) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value + index * 6151
-	var difficulty := clamp(float(index) / 90.0, 0.0, 1.0)
-	var gap_size := lerp(510.0, 285.0, difficulty)
-	var target_y := rng.randf_range(400.0, 1520.0)
-	var moving := index > 6 and rng.randf() < lerp(0.12, 0.52, difficulty)
+	var difficulty: float = clampf(float(index) / 90.0, 0.0, 1.0)
+	var gap_size: float = lerpf(510.0, 285.0, difficulty)
+	var target_y: float = rng.randf_range(400.0, 1520.0)
+	var moving: bool = index > 6 and rng.randf() < lerpf(0.12, 0.52, difficulty)
 	var powerup := ""
 
 	if index > 2 and index % 6 == 0 and rng.randf() < 0.8:
@@ -82,4 +82,4 @@ static func build_endless_segment(index: int, seed_value: int = 44119) -> Dictio
 	}
 
 static func endless_speed(index: int) -> float:
-	return min(700.0, 360.0 + float(index) * 3.4)
+	return minf(700.0, 360.0 + float(index) * 3.4)

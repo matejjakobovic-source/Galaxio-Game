@@ -12,12 +12,8 @@ const TOP_LIMIT := 95.0
 const BOTTOM_LIMIT := 1825.0
 
 const THEME_COLORS := [
-	Color("685cff"),
-	Color("22c8ff"),
-	Color("ff5f8f"),
-	Color("8f68ff"),
-	Color("3ce0a3"),
-	Color("ff9f45")
+	Color("685cff"), Color("22c8ff"), Color("ff5f8f"),
+	Color("8f68ff"), Color("3ce0a3"), Color("ff9f45")
 ]
 
 const SKINS := {
@@ -35,17 +31,14 @@ var state: String = "menu"
 var mode: String = "level"
 var current_level: int = 1
 var level_data: Dictionary = {}
-
 var world: Node2D = null
 var player: CharacterBody2D = null
 var ui: Control = null
-
 var score_label: Label = null
 var coin_label: Label = null
 var combo_label: Label = null
 var power_label: Label = null
 var progress_label: Label = null
-
 var score: float = 0.0
 var run_coins: int = 0
 var combo: int = 0
@@ -54,12 +47,10 @@ var passed_gates: int = 0
 var target_gates: int = 0
 var world_speed: float = 360.0
 var elapsed: float = 0.0
-
 var magnet_time: float = 0.0
 var slow_time: float = 0.0
 var invulnerable_time: float = 0.0
 var rush_time: float = 0.0
-
 var endless_index: int = 0
 var next_gate_x: float = 900.0
 var daily_data: Dictionary = {}
@@ -70,75 +61,53 @@ func _ready() -> void:
 	var background := StarfieldScript.new()
 	background.z_index = -50
 	add_child(background)
-
 	var canvas := CanvasLayer.new()
 	canvas.layer = 20
 	add_child(canvas)
-
 	ui = Control.new()
 	ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	canvas.add_child(ui)
-
 	show_menu()
 
 func _process(delta: float) -> void:
-	if state != "game":
+	if state != "game" or world == null or player == null:
 		return
-	if world == null or player == null:
-		return
-
 	elapsed += delta
-	magnet_time = max(0.0, magnet_time - delta)
-	slow_time = max(0.0, slow_time - delta)
-	invulnerable_time = max(0.0, invulnerable_time - delta)
-	rush_time = max(0.0, rush_time - delta)
-
+	magnet_time = maxf(0.0, magnet_time - delta)
+	slow_time = maxf(0.0, slow_time - delta)
+	invulnerable_time = maxf(0.0, invulnerable_time - delta)
+	rush_time = maxf(0.0, rush_time - delta)
 	if mode != "level":
 		world_speed = LevelFactory.endless_speed(passed_gates)
-
-	var slow_factor := 1.0
-	if slow_time > 0.0:
-		slow_factor = 0.64
-
-	var rush_factor := 1.0
-	if rush_time > 0.0:
-		rush_factor = 1.08
-
-	var actual_speed := world_speed * SaveData.speed_multiplier() * slow_factor * rush_factor
+	var slow_factor: float = 0.64 if slow_time > 0.0 else 1.0
+	var rush_factor: float = 1.08 if rush_time > 0.0 else 1.0
+	var actual_speed: float = world_speed * SaveData.speed_multiplier() * slow_factor * rush_factor
 	world.position.x -= actual_speed * delta
 	score += actual_speed * delta * (0.105 + float(combo) * 0.005)
-
 	_check_gate_passes()
 	_apply_magnet(delta)
 	_cleanup_world()
-
 	if mode != "level":
 		while next_gate_x + world.position.x < 2800.0:
 			_spawn_endless_segment()
-
 	if player.global_position.y < TOP_LIMIT or player.global_position.y > BOTTOM_LIMIT:
 		_handle_hit()
-
 	if mode == "daily" and str(daily_data.get("type", "")) == "survive":
 		daily_progress = elapsed
 		_check_daily_completion()
-
 	_update_hud()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if state != "game" or player == null:
 		return
-
 	if event is InputEventScreenTouch:
 		if event.pressed:
 			_apply_touch_gravity(event.position.y)
 		return
-
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			_apply_touch_gravity(event.position.y)
 		return
-
 	if event is InputEventKey:
 		if not event.pressed or event.echo:
 			return
@@ -153,17 +122,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			_pause_game()
 
 func _apply_touch_gravity(touch_y: float) -> void:
-	var middle_y := get_viewport().get_visible_rect().size.y * 0.5
-	if touch_y < middle_y:
-		_set_gravity(-1.0)
-	else:
-		_set_gravity(1.0)
+	var middle_y: float = get_viewport().get_visible_rect().size.y * 0.5
+	_set_gravity(-1.0 if touch_y < middle_y else 1.0)
 
 func _set_gravity(direction: float) -> void:
-	if player == null:
-		return
-	player.set_gravity(direction)
-	_haptic(8)
+	if player != null:
+		player.set_gravity(direction)
+		_haptic(8)
 
 func _haptic(duration_ms: int) -> void:
 	Input.vibrate_handheld(duration_ms)
@@ -172,13 +137,10 @@ func show_menu() -> void:
 	state = "menu"
 	_destroy_game()
 	_clear_ui()
-
 	_add_label("GRAVITY", Vector2(90, 165), Vector2(900, 150), 112, Color("f4f7ff"), HORIZONTAL_ALIGNMENT_CENTER)
 	_add_label("MASTER THE PULL", Vector2(90, 320), Vector2(900, 55), 30, Color("77f8ff"), HORIZONTAL_ALIGNMENT_CENTER)
-
-	var status_text := "◆ %d COINS   •   LEVEL %d/120   •   STREAK %d" % [SaveData.coins(), SaveData.unlocked_level(), SaveData.daily_streak()]
+	var status_text: String = "◆ %d COINS   •   LEVEL %d/120   •   STREAK %d" % [SaveData.coins(), SaveData.unlocked_level(), SaveData.daily_streak()]
 	_add_label(status_text, Vector2(80, 485), Vector2(920, 60), 23, Color("d6dcff"), HORIZONTAL_ALIGNMENT_CENTER)
-
 	_add_button("CONTINUE  •  LEVEL %d" % SaveData.unlocked_level(), 650, _start_level.bind(SaveData.unlocked_level()), true)
 	_add_button("LEVEL MAP", 785, show_levels)
 	_add_button("∞  ENDLESS", 920, _start_endless)
@@ -192,19 +154,16 @@ func show_levels() -> void:
 	_clear_ui()
 	_add_header("LEVEL MAP", "120 progressively harder runs")
 	_add_back_button(show_menu)
-
 	var scroll := ScrollContainer.new()
 	scroll.position = Vector2(90, 300)
 	scroll.size = Vector2(900, 1430)
 	ui.add_child(scroll)
-
 	var grid := GridContainer.new()
 	grid.columns = 4
 	grid.add_theme_constant_override("h_separation", 18)
 	grid.add_theme_constant_override("v_separation", 18)
 	scroll.add_child(grid)
-
-	var unlocked := SaveData.unlocked_level()
+	var unlocked: int = SaveData.unlocked_level()
 	for level_number in range(1, 121):
 		var button := Button.new()
 		button.custom_minimum_size = Vector2(205, 112)
@@ -222,9 +181,8 @@ func show_daily() -> void:
 	state = "menu"
 	_clear_ui()
 	daily_data = _create_daily_data()
-
-	var today := Time.get_date_string_from_system()
-	var claimed := SaveData.daily_is_claimed(today)
+	var today: String = Time.get_date_string_from_system()
+	var claimed: bool = SaveData.daily_is_claimed(today)
 	_add_header("DAILY CHALLENGE", today)
 	_add_back_button(show_menu)
 	_add_label("TODAY'S MISSION", Vector2(100, 500), Vector2(880, 60), 25, Color("77f8ff"), HORIZONTAL_ALIGNMENT_CENTER)
@@ -245,7 +203,6 @@ func show_shop() -> void:
 	_add_label("◆ %d" % SaveData.coins(), Vector2(730, 210), Vector2(250, 55), 28, Color("ffd85a"), HORIZONTAL_ALIGNMENT_RIGHT)
 	_add_label("VELOCITY CORE  %d/10" % SaveData.speed_upgrade(), Vector2(105, 340), Vector2(500, 55), 30, Color("f4f6ff"))
 	_add_label("+1.8% speed and +5% coin yield / upgrade", Vector2(105, 400), Vector2(580, 45), 20, Color(0.7, 0.76, 1.0, 0.75))
-
 	var upgrade_button := Button.new()
 	upgrade_button.position = Vector2(700, 330)
 	upgrade_button.size = Vector2(275, 110)
@@ -258,27 +215,21 @@ func show_shop() -> void:
 		upgrade_button.pressed.connect(_buy_speed_upgrade)
 	_style_button(upgrade_button, true)
 	ui.add_child(upgrade_button)
-
-	var skin_ids := ["terra", "mars", "neon", "saturn", "void", "sun", "ice", "toxic"]
-	var y := 520.0
+	var skin_ids: Array[String] = ["terra", "mars", "neon", "saturn", "void", "sun", "ice", "toxic"]
+	var y: float = 520.0
 	for skin_id in skin_ids:
 		var skin_meta: Dictionary = SKINS[skin_id]
 		_add_label(str(skin_meta["name"]).to_upper(), Vector2(115, y), Vector2(280, 80), 27, Color("f1f4ff"))
-
-		var status := "◆ %d" % int(skin_meta["cost"])
+		var status: String = "◆ %d" % int(skin_meta["cost"])
 		if SaveData.selected_skin() == skin_id:
 			status = "EQUIPPED"
 		elif SaveData.owns_skin(skin_id):
 			status = "OWNED"
 		_add_label(status, Vector2(390, y), Vector2(240, 80), 20, Color("77f8ff"), HORIZONTAL_ALIGNMENT_CENTER)
-
 		var skin_button := Button.new()
 		skin_button.position = Vector2(670, y + 5)
 		skin_button.size = Vector2(280, 70)
-		if SaveData.owns_skin(skin_id):
-			skin_button.text = "SELECT"
-		else:
-			skin_button.text = "UNLOCK"
+		skin_button.text = "SELECT" if SaveData.owns_skin(skin_id) else "UNLOCK"
 		skin_button.disabled = SaveData.selected_skin() == skin_id
 		skin_button.pressed.connect(_skin_action.bind(skin_id))
 		_style_button(skin_button, false)
@@ -290,13 +241,11 @@ func show_leaderboard() -> void:
 	_clear_ui()
 	_add_header("LEADERBOARD", "Local device top 10")
 	_add_back_button(show_menu)
-
-	var board := SaveData.leaderboard()
+	var board: Array = SaveData.leaderboard()
 	if board.is_empty():
 		_add_label("No records yet.\nPlay Endless and set the first score.", Vector2(120, 650), Vector2(840, 180), 34, Color(0.8, 0.84, 1.0, 0.8), HORIZONTAL_ALIGNMENT_CENTER)
 		return
-
-	var y := 340.0
+	var y: float = 340.0
 	for index in range(board.size()):
 		var entry: Dictionary = board[index]
 		_add_label("#%d   %s" % [index + 1, str(entry.get("mode", "run")).to_upper()], Vector2(110, y), Vector2(430, 70), 25, Color("d6dcff"))
@@ -309,7 +258,6 @@ func _start_level(level_number: int) -> void:
 	level_data = LevelFactory.build_level(current_level)
 	_begin_run()
 	world_speed = float(level_data["speed"])
-
 	var segments: Array = level_data["segments"]
 	target_gates = segments.size()
 	for index in range(segments.size()):
@@ -330,7 +278,7 @@ func _start_daily() -> void:
 	mode = "daily"
 	current_level = 0
 	daily_data = _create_daily_data()
-	daily_seed = abs(Time.get_date_string_from_system().hash()) + 7727
+	daily_seed = absi(Time.get_date_string_from_system().hash()) + 7727
 	_begin_run()
 	for _i in range(8):
 		_spawn_endless_segment()
@@ -339,7 +287,6 @@ func _start_daily() -> void:
 func _begin_run() -> void:
 	_destroy_game()
 	_clear_ui()
-
 	state = "game"
 	score = 0.0
 	run_coins = 0
@@ -355,11 +302,9 @@ func _begin_run() -> void:
 	endless_index = 0
 	next_gate_x = 900.0
 	daily_progress = 0.0
-
 	world = Node2D.new()
 	world.name = "World"
 	add_child(world)
-
 	player = PlanetScript.new()
 	player.name = "Player"
 	add_child(player)
@@ -368,31 +313,26 @@ func _begin_run() -> void:
 func _spawn_segment(config: Dictionary, segment_index: int) -> void:
 	if world == null:
 		return
-
-	var theme_index := int(segment_index / 12) % THEME_COLORS.size()
+	var theme_index: int = int(segment_index / 12) % THEME_COLORS.size()
 	var gate := GateScript.new()
 	world.add_child(gate)
 	gate.setup(config, THEME_COLORS[theme_index])
 	gate.collided.connect(_handle_hit)
-
-	var coin_count := int(config.get("coin_arc", 4))
-	var gate_x := float(config.get("x", 0.0))
-	var gate_y := float(config.get("gap_y", 960.0))
+	var coin_count: int = int(config.get("coin_arc", 4))
+	var gate_x: float = float(config.get("x", 0.0))
+	var gate_y: float = float(config.get("gap_y", 960.0))
 	for coin_index in range(coin_count):
-		var centered_index := float(coin_index) - float(coin_count - 1) * 0.5
-		var coin_x := gate_x - 210.0 + centered_index * 58.0
-		var coin_y := gate_y + sin(float(coin_index) * 1.25) * 70.0
-		_spawn_pickup("coin", Vector2(coin_x, coin_y))
-
-	var powerup := str(config.get("powerup", ""))
+		var centered_index: float = float(coin_index) - float(coin_count - 1) * 0.5
+		_spawn_pickup("coin", Vector2(gate_x - 210.0 + centered_index * 58.0, gate_y + sin(float(coin_index) * 1.25) * 70.0))
+	var powerup: String = str(config.get("powerup", ""))
 	if not powerup.is_empty():
 		_spawn_pickup(powerup, Vector2(gate_x + 225.0, gate_y))
 
 func _spawn_endless_segment() -> void:
-	var config := LevelFactory.build_endless_segment(endless_index, daily_seed)
+	var config: Dictionary = LevelFactory.build_endless_segment(endless_index, daily_seed)
 	config["x"] = next_gate_x
 	_spawn_segment(config, endless_index)
-	next_gate_x += LevelFactory.BASE_SPACING + min(90.0, float(endless_index) * 0.7)
+	next_gate_x += LevelFactory.BASE_SPACING + minf(90.0, float(endless_index) * 0.7)
 	endless_index += 1
 
 func _spawn_pickup(kind: String, pickup_position: Vector2) -> void:
@@ -407,28 +347,21 @@ func _spawn_pickup(kind: String, pickup_position: Vector2) -> void:
 func _check_gate_passes() -> void:
 	if world == null or player == null:
 		return
-
 	for child in world.get_children():
-		if str(child.get_meta("entity_type", "")) != "gate":
+		if str(child.get_meta("entity_type", "")) != "gate" or child.was_passed() or child.global_position.x > player.global_position.x:
 			continue
-		if child.was_passed():
-			continue
-		if child.global_position.x > player.global_position.x:
-			continue
-
 		child.mark_passed()
 		passed_gates += 1
-		var distance_to_center := abs(player.global_position.y - child.get_center_y())
-		var perfect := distance_to_center <= child.get_gap_size() * 0.17
+		var distance_to_center: float = absf(player.global_position.y - float(child.get_center_y()))
+		var perfect: bool = distance_to_center <= float(child.get_gap_size()) * 0.17
 		_on_gate_passed(perfect)
-
 	if mode == "level" and target_gates > 0 and passed_gates >= target_gates:
 		_finish_run(true, "LEVEL CLEARED")
 
 func _on_gate_passed(perfect: bool) -> void:
 	if perfect:
 		combo += 1
-		best_combo = max(best_combo, combo)
+		best_combo = maxi(best_combo, combo)
 		score += 120.0 * (1.0 + float(combo) * 0.18)
 		_haptic(14)
 		if combo > 0 and combo % 5 == 0:
@@ -438,55 +371,45 @@ func _on_gate_passed(perfect: bool) -> void:
 	else:
 		combo = 0
 		score += 45.0
-
 	if mode == "daily" and str(daily_data.get("type", "")) == "combo":
 		daily_progress = float(best_combo)
 		_check_daily_completion()
 
 func _handle_hit() -> void:
-	if state != "game" or player == null:
+	if state != "game" or player == null or invulnerable_time > 0.0:
 		return
-	if invulnerable_time > 0.0:
-		return
-
 	if player.consume_shield():
 		invulnerable_time = 1.0
 		combo = 0
-		score = max(0.0, score - 180.0)
+		score = maxf(0.0, score - 180.0)
 		player.velocity.y *= -0.32
-		player.global_position.y = clamp(player.global_position.y, 150.0, 1770.0)
+		player.global_position.y = clampf(player.global_position.y, 150.0, 1770.0)
 		_haptic(65)
 		return
-
 	_haptic(140)
 	_finish_run(false, "GRAVITY LOST")
 
 func _on_pickup_collected(kind: String, amount: int) -> void:
 	if kind == "coin":
-		var gained := max(1, roundi(float(amount) * SaveData.coin_multiplier()))
+		var gained: int = maxi(1, roundi(float(amount) * SaveData.coin_multiplier()))
 		run_coins += gained
 		score += 35.0 * float(gained)
 		if mode == "daily" and str(daily_data.get("type", "")) == "coins":
 			daily_progress += float(gained)
 			_check_daily_completion()
 	elif kind == "magnet":
-		magnet_time = max(magnet_time, 7.5)
-	elif kind == "shield":
-		if player != null:
-			player.add_shield()
+		magnet_time = maxf(magnet_time, 7.5)
+	elif kind == "shield" and player != null:
+		player.add_shield()
 	elif kind == "slow":
-		slow_time = max(slow_time, 6.0)
+		slow_time = maxf(slow_time, 6.0)
 	_haptic(10)
 
 func _apply_magnet(delta: float) -> void:
 	if magnet_time <= 0.0 or world == null or player == null:
 		return
 	for child in world.get_children():
-		if str(child.get_meta("entity_type", "")) != "pickup":
-			continue
-		if child.get_pickup_kind() != "coin":
-			continue
-		if child.global_position.distance_to(player.global_position) < 390.0:
+		if str(child.get_meta("entity_type", "")) == "pickup" and child.get_pickup_kind() == "coin" and child.global_position.distance_to(player.global_position) < 390.0:
 			child.pull_toward(player.global_position, 980.0, delta)
 
 func _cleanup_world() -> void:
@@ -499,40 +422,32 @@ func _cleanup_world() -> void:
 func _finish_run(success: bool, title: String) -> void:
 	if state != "game":
 		return
-
 	state = "result"
 	if player != null:
 		player.active = false
 	if world != null:
 		world.process_mode = Node.PROCESS_MODE_DISABLED
-
-	var earned := run_coins
-	var bonus := 0
+	var earned: int = run_coins
+	var bonus: int = 0
 	if mode == "level" and success:
 		bonus = int(level_data.get("reward", 0))
 		earned += bonus
-		SaveData.unlock_level(min(120, current_level + 1))
-
+		SaveData.unlock_level(mini(120, current_level + 1))
 	SaveData.add_coins(earned)
 	if mode == "daily" and success:
-		var daily_reward := int(daily_data.get("reward", 0))
+		var daily_reward: int = int(daily_data.get("reward", 0))
 		if SaveData.claim_daily(Time.get_date_string_from_system(), daily_reward):
 			bonus += daily_reward
-
-	var score_mode := mode
+	var score_mode: String = mode
 	if mode == "level":
 		score_mode = "level %d" % current_level
 	SaveData.record_score(score_mode, int(score))
-
 	_clear_ui()
-	var title_color := Color("ff728e")
-	if success:
-		title_color = Color("72f1a8")
+	var title_color: Color = Color("72f1a8") if success else Color("ff728e")
 	_add_label(title, Vector2(100, 380), Vector2(880, 100), 58, title_color, HORIZONTAL_ALIGNMENT_CENTER)
 	_add_label("%07d" % int(score), Vector2(100, 515), Vector2(880, 90), 52, Color("ffffff"), HORIZONTAL_ALIGNMENT_CENTER)
 	_add_label("◆ %d RUN   +   ◆ %d BONUS" % [run_coins, bonus], Vector2(100, 680), Vector2(880, 60), 27, Color("ffd85a"), HORIZONTAL_ALIGNMENT_CENTER)
 	_add_label("BEST PERFECT COMBO  x%d" % best_combo, Vector2(100, 760), Vector2(880, 55), 23, Color("77f8ff"), HORIZONTAL_ALIGNMENT_CENTER)
-
 	if mode == "level" and success and current_level < 120:
 		_add_button("NEXT LEVEL", 980, _start_level.bind(current_level + 1), true)
 	elif mode == "level":
@@ -567,27 +482,21 @@ func _resume_game() -> void:
 	_build_hud()
 
 func _create_daily_data() -> Dictionary:
-	var hash_value := abs(Time.get_date_string_from_system().hash())
-	var challenge_type := hash_value % 3
-
+	var hash_value: int = absi(Time.get_date_string_from_system().hash())
+	var challenge_type: int = hash_value % 3
 	if challenge_type == 0:
-		var coin_target := 24 + hash_value % 13
+		var coin_target: int = 24 + hash_value % 13
 		return {"type": "coins", "target": coin_target, "reward": 180 + hash_value % 80, "label": "Collect %d coins in one run" % coin_target}
-
 	if challenge_type == 1:
-		var combo_target := 5 + hash_value % 5
+		var combo_target: int = 5 + hash_value % 5
 		return {"type": "combo", "target": combo_target, "reward": 200 + hash_value % 90, "label": "Reach a Perfect combo of x%d" % combo_target}
-
-	var survival_target := 45 + hash_value % 31
+	var survival_target: int = 45 + hash_value % 31
 	return {"type": "survive", "target": survival_target, "reward": 210 + hash_value % 90, "label": "Survive for %d seconds" % survival_target}
 
 func _check_daily_completion() -> void:
-	if state != "game" or mode != "daily":
-		return
-	if daily_progress < float(daily_data.get("target", 1)):
-		return
-	score += 1200.0
-	_finish_run(true, "DAILY COMPLETE")
+	if state == "game" and mode == "daily" and daily_progress >= float(daily_data.get("target", 1)):
+		score += 1200.0
+		_finish_run(true, "DAILY COMPLETE")
 
 func _build_hud() -> void:
 	_clear_ui()
@@ -596,7 +505,6 @@ func _build_hud() -> void:
 	combo_label = _add_label("", Vector2(720, 130), Vector2(300, 48), 22, Color("77f8ff"), HORIZONTAL_ALIGNMENT_RIGHT)
 	power_label = _add_label("", Vector2(45, 130), Vector2(650, 48), 20, Color("d9b0ff"))
 	progress_label = _add_label("", Vector2(220, 1760), Vector2(640, 55), 21, Color(0.82, 0.86, 1.0, 0.75), HORIZONTAL_ALIGNMENT_CENTER)
-
 	var pause_button := Button.new()
 	pause_button.position = Vector2(918, 45)
 	pause_button.size = Vector2(110, 72)
@@ -609,14 +517,9 @@ func _build_hud() -> void:
 func _update_hud() -> void:
 	if score_label == null or not is_instance_valid(score_label):
 		return
-
 	score_label.text = "%07d" % int(score)
 	coin_label.text = "◆ %d" % run_coins
-	if combo > 1:
-		combo_label.text = "PERFECT x%d" % combo
-	else:
-		combo_label.text = ""
-
+	combo_label.text = "PERFECT x%d" % combo if combo > 1 else ""
 	var powers: Array[String] = []
 	if player != null and player.shield_charges > 0:
 		powers.append("SHIELD")
@@ -627,7 +530,6 @@ func _update_hud() -> void:
 	if rush_time > 0.0:
 		powers.append("RUSH %.1f" % rush_time)
 	power_label.text = "  •  ".join(powers)
-
 	if mode == "level":
 		progress_label.text = "LEVEL %d   %d / %d GATES" % [current_level, passed_gates, target_gates]
 	elif mode == "daily":
@@ -663,7 +565,6 @@ func _clear_ui() -> void:
 			child.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			child.visible = false
 		child.queue_free()
-
 	score_label = null
 	coin_label = null
 	combo_label = null
@@ -709,13 +610,8 @@ func _add_button(text: String, y: float, callback: Callable, primary: bool = fal
 
 func _style_button(button: Button, primary: bool) -> void:
 	var normal_style := StyleBoxFlat.new()
-	if primary:
-		normal_style.bg_color = Color("4e50db")
-		normal_style.border_color = Color("777cff")
-	else:
-		normal_style.bg_color = Color(0.07, 0.09, 0.22, 0.96)
-		normal_style.border_color = Color(0.55, 0.65, 1.0, 0.2)
-
+	normal_style.bg_color = Color("4e50db") if primary else Color(0.07, 0.09, 0.22, 0.96)
+	normal_style.border_color = Color("777cff") if primary else Color(0.55, 0.65, 1.0, 0.2)
 	normal_style.corner_radius_top_left = 24
 	normal_style.corner_radius_top_right = 24
 	normal_style.corner_radius_bottom_left = 24
@@ -725,7 +621,6 @@ func _style_button(button: Button, primary: bool) -> void:
 	normal_style.border_width_right = 1
 	normal_style.border_width_bottom = 1
 	button.add_theme_stylebox_override("normal", normal_style)
-
 	var hover_style: StyleBoxFlat = normal_style.duplicate()
 	hover_style.bg_color = normal_style.bg_color.lightened(0.1)
 	button.add_theme_stylebox_override("hover", hover_style)
