@@ -39,3 +39,14 @@ jobs:
             echo "Godot reported runtime errors."
             exit 1
           fi
+
+      - name: Exercise gameplay modes
+        shell: bash
+        run: |
+          set -o pipefail
+          godot --headless --path . --script res://tests/runtime_smoke.gd 2>&1 | tee godot-gameplay.log
+          if grep -E "SCRIPT ERROR|ERROR:|TEST_FAILURE" godot-gameplay.log; then
+            echo "Gameplay runtime test failed."
+            exit 1
+          fi
+          grep -q "RUNTIME_SMOKE_OK" godot-gameplay.log
