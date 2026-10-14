@@ -2,8 +2,9 @@ name: Godot Check
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, "fix/**" ]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   validate:
@@ -20,4 +21,7 @@ jobs:
           include-templates: false
 
       - name: Import project and validate scripts
-        run: godot --headless --path . --editor --quit-after 120
+        run: godot --headless --path . --editor --quit
+
+      - name: Smoke-run main scene
+        run: godot --headless --path . --quit-after 5
