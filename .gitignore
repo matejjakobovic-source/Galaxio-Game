@@ -1,0 +1,9 @@
+.godot/
+.import/
+export.cfg
+export_presets.cfg
+*.apk
+*.aab
+*.ipa
+builds/
+.DS_Store
