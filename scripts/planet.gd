@@ -45,7 +45,7 @@ func reset_player(start_position: Vector2, new_skin_id: String) -> void:
 func set_gravity(direction: float) -> void:
 	if not active:
 		return
-	var normalized_direction := sign(direction)
+	var normalized_direction: float = signf(direction)
 	if normalized_direction == 0.0:
 		return
 	gravity_direction = normalized_direction
@@ -74,10 +74,10 @@ func _physics_process(delta: float) -> void:
 		return
 	velocity.x = 0.0
 	velocity.y += gravity_direction * GRAVITY_STRENGTH * delta
-	velocity.y = clamp(velocity.y, -MAX_VERTICAL_SPEED, MAX_VERTICAL_SPEED)
+	velocity.y = clampf(velocity.y, -MAX_VERTICAL_SPEED, MAX_VERTICAL_SPEED)
 	move_and_slide()
 	global_position.x = PLAYER_X
-	pulse = max(0.0, pulse - delta * 2.8)
+	pulse = maxf(0.0, pulse - delta * 2.8)
 	if pulse > 0.0:
 		queue_redraw()
 
@@ -85,7 +85,7 @@ func _draw() -> void:
 	var skin: Dictionary = SKINS.get(skin_id, SKINS["terra"])
 	var base: Color = skin["base"]
 	var accent: Color = skin["accent"]
-	var glow_radius := 52.0 + pulse * 8.0
+	var glow_radius: float = 52.0 + pulse * 8.0
 
 	draw_circle(Vector2.ZERO, glow_radius, Color(accent.r, accent.g, accent.b, 0.10 + pulse * 0.08))
 	draw_circle(Vector2.ZERO, 42.0, base)
@@ -101,7 +101,7 @@ func _draw() -> void:
 		draw_arc(Vector2.ZERO, 27.0, 0.0, TAU, 42, accent, 5.0)
 	elif skin_id == "sun":
 		for i in range(12):
-			var angle := TAU * float(i) / 12.0
+			var angle: float = TAU * float(i) / 12.0
 			var ray := Vector2(cos(angle), sin(angle))
 			draw_line(ray * 48.0, ray * 60.0, accent, 4.0)
 
