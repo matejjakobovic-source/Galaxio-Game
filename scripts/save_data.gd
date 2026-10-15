@@ -2,6 +2,7 @@ extends Node
 
 const SAVE_PATH := "user://gravity_save.json"
 const MAX_LEVEL := 120
+const TEST_UNLOCK_ALL_LEVELS := true
 
 var data: Dictionary = {}
 
@@ -63,10 +64,12 @@ func spend_coins(amount: int) -> bool:
 	return true
 
 func unlocked_level() -> int:
+	if TEST_UNLOCK_ALL_LEVELS:
+		return MAX_LEVEL
 	return clampi(int(data.get("unlocked_level", 1)), 1, MAX_LEVEL)
 
 func unlock_level(new_level: int) -> void:
-	data["unlocked_level"] = max(unlocked_level(), clampi(new_level, 1, MAX_LEVEL))
+	data["unlocked_level"] = max(int(data.get("unlocked_level", 1)), clampi(new_level, 1, MAX_LEVEL))
 	save()
 
 func selected_skin() -> String:
