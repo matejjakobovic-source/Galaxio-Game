@@ -5,6 +5,8 @@ const GateScript = preload("res://scripts/gate.gd")
 const PickupScript = preload("res://scripts/pickup.gd")
 const StarfieldScript = preload("res://scripts/starfield.gd")
 const LevelFactory = preload("res://scripts/level_factory.gd")
+const HazardScript = preload("res://scripts/hazard.gd")
+const AudioManagerScript = preload("res://scripts/audio_manager.gd")
 
 const VIEWPORT_SIZE := Vector2(1080.0, 1920.0)
 const PLAYER_START := Vector2(220.0, 960.0)
@@ -12,8 +14,8 @@ const TOP_LIMIT := 95.0
 const BOTTOM_LIMIT := 1825.0
 
 const THEME_COLORS := [
-	Color("685cff"), Color("22c8ff"), Color("ff5f8f"),
-	Color("8f68ff"), Color("3ce0a3"), Color("ff9f45")
+	Color("685cff"), Color("22c8ff"), Color("9a718f"), Color("ff7a45"),
+	Color("3ce0d0"), Color("7a5bd9"), Color("d15cff"), Color("ff9f45")
 ]
 
 const SKINS := {
@@ -34,6 +36,8 @@ var level_data: Dictionary = {}
 var world: Node2D = null
 var player: CharacterBody2D = null
 var ui: Control = null
+var background: Node2D = null
+var audio_manager: Node = null
 var score_label: Label = null
 var coin_label: Label = null
 var combo_label: Label = null
@@ -56,11 +60,15 @@ var next_gate_x: float = 900.0
 var daily_data: Dictionary = {}
 var daily_progress: float = 0.0
 var daily_seed: int = 44119
+var current_zone_index: int = 0
+var special_speed_multiplier: float = 1.0
 
 func _ready() -> void:
-	var background := StarfieldScript.new()
+	background = StarfieldScript.new()
 	background.z_index = -50
 	add_child(background)
+	audio_manager = AudioManagerScript.new()
+	add_child(audio_manager)
 	var canvas := CanvasLayer.new()
 	canvas.layer = 20
 	add_child(canvas)
@@ -79,9 +87,18 @@ func _process(delta: float) -> void:
 	rush_time = maxf(0.0, rush_time - delta)
 	if mode != "level":
 		world_speed = LevelFactory.endless_speed(passed_gates)
+		var endless_zone: int = int(floor(float(passed_gates) / 12.0)) % 8
+		if endless_zone != current_zone_index:
+			current_zone_index = endless_zone
+			if background != null:
+				background.call("set_zone", current_zone_index)
+	player.set_environment_gravity_multiplier(1.0)
+	_apply_environment_hazards(delta)
+	special_speed_multiplier = _environment_speed_multiplier()
 	var slow_factor: float = 0.64 if slow_time > 0.0 else 1.0
 	var rush_factor: float = 1.08 if rush_time > 0.0 else 1.0
-	var actual_speed: float = world_speed * SaveData.speed_multiplier() * slow_factor * rush_factor
+	var actual_speed: float = world_speed * SaveData.speed_multiplier() * slow_factor * rush_factor * special_speed_multiplier
+	player.set_visual_speed(actual_speed)
 	world.position.x -= actual_speed * delta
 	score += actual_speed * delta * (0.105 + float(combo) * 0.005)
 	_check_gate_passes()
@@ -117,6 +134,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_set_gravity(1.0)
 		elif event.keycode == KEY_SPACE:
 			player.toggle_gravity()
+			_play_sfx("flip")
 			_haptic(8)
 		elif event.keycode == KEY_ESCAPE:
 			_pause_game()
@@ -128,13 +146,21 @@ func _apply_touch_gravity(touch_y: float) -> void:
 func _set_gravity(direction: float) -> void:
 	if player != null:
 		player.set_gravity(direction)
+		_play_sfx("flip")
 		_haptic(8)
+
+func _play_sfx(name: String) -> void:
+	if audio_manager != null and audio_manager.has_method("play_sfx"):
+		audio_manager.call("play_sfx", name)
 
 func _haptic(duration_ms: int) -> void:
 	Input.vibrate_handheld(duration_ms)
 
 func show_menu() -> void:
 	state = "menu"
+	current_zone_index = 0
+	if background != null:
+		background.call("set_zone", 0)
 	_destroy_game()
 	_clear_ui()
 	_add_label("GRAVITY", Vector2(90, 165), Vector2(900, 150), 112, Color("f4f7ff"), HORIZONTAL_ALIGNMENT_CENTER)
@@ -152,7 +178,7 @@ func show_menu() -> void:
 func show_levels() -> void:
 	state = "menu"
 	_clear_ui()
-	_add_header("LEVEL MAP", "120 progressively harder runs")
+	_add_header("LEVEL MAP", "120 runs across 8 evolving space zones")
 	_add_back_button(show_menu)
 	var scroll := ScrollContainer.new()
 	scroll.position = Vector2(90, 300)
@@ -256,6 +282,9 @@ func _start_level(level_number: int) -> void:
 	mode = "level"
 	current_level = clampi(level_number, 1, 120)
 	level_data = LevelFactory.build_level(current_level)
+	current_zone_index = int(level_data.get("zone", 0))
+	if background != null:
+		background.call("set_zone", current_zone_index)
 	_begin_run()
 	world_speed = float(level_data["speed"])
 	var segments: Array = level_data["segments"]
@@ -269,6 +298,9 @@ func _start_endless() -> void:
 	mode = "endless"
 	current_level = 0
 	daily_seed = 44119
+	current_zone_index = 0
+	if background != null:
+		background.call("set_zone", current_zone_index)
 	_begin_run()
 	for _i in range(8):
 		_spawn_endless_segment()
@@ -279,12 +311,16 @@ func _start_daily() -> void:
 	current_level = 0
 	daily_data = _create_daily_data()
 	daily_seed = absi(Time.get_date_string_from_system().hash()) + 7727
+	current_zone_index = daily_seed % 8
+	if background != null:
+		background.call("set_zone", current_zone_index)
 	_begin_run()
 	for _i in range(8):
 		_spawn_endless_segment()
 	_build_hud()
 
 func _begin_run() -> void:
+	_play_sfx("button")
 	_destroy_game()
 	_clear_ui()
 	state = "game"
@@ -310,23 +346,61 @@ func _begin_run() -> void:
 	add_child(player)
 	player.reset_player(PLAYER_START, SaveData.selected_skin())
 
-func _spawn_segment(config: Dictionary, segment_index: int) -> void:
+func _spawn_segment(config: Dictionary, _segment_index: int) -> void:
 	if world == null:
 		return
-	var theme_index: int = int(segment_index / 12) % THEME_COLORS.size()
+	var zone_index: int = int(config.get("zone", current_zone_index))
+	var theme_index: int = clampi(zone_index, 0, THEME_COLORS.size() - 1)
 	var gate := GateScript.new()
 	world.add_child(gate)
 	gate.setup(config, THEME_COLORS[theme_index])
 	gate.collided.connect(_handle_hit)
-	var coin_count: int = int(config.get("coin_arc", 4))
+
+	var coin_count: int = int(config.get("coin_arc", 3))
 	var gate_x: float = float(config.get("x", 0.0))
 	var gate_y: float = float(config.get("gap_y", 960.0))
+	var gap_size: float = float(config.get("gap", 460.0))
+	var coin_pattern: String = str(config.get("coin_pattern", "wave"))
+	var coin_risk: float = float(config.get("coin_risk", 0.55))
 	for coin_index in range(coin_count):
-		var centered_index: float = float(coin_index) - float(coin_count - 1) * 0.5
-		_spawn_pickup("coin", Vector2(gate_x - 210.0 + centered_index * 58.0, gate_y + sin(float(coin_index) * 1.25) * 70.0))
+		var coin_position: Vector2 = _coin_position(gate_x, gate_y, gap_size, coin_pattern, coin_risk, coin_index, coin_count)
+		_spawn_pickup("coin", coin_position)
+
 	var powerup: String = str(config.get("powerup", ""))
 	if not powerup.is_empty():
 		_spawn_pickup(powerup, Vector2(gate_x + 225.0, gate_y))
+
+	var special: String = str(config.get("special", ""))
+	if not special.is_empty():
+		_spawn_hazard(config, THEME_COLORS[theme_index])
+
+func _coin_position(gate_x: float, gate_y: float, gap_size: float, pattern: String, risk: float, coin_index: int, coin_count: int) -> Vector2:
+	var centered_index: float = float(coin_index) - float(coin_count - 1) * 0.5
+	var x: float = gate_x - 225.0 + centered_index * 68.0
+	var max_offset: float = maxf(40.0, gap_size * 0.5 - 72.0)
+	var risky_offset: float = max_offset * clampf(risk, 0.0, 1.0)
+	var y: float = gate_y
+	match pattern:
+		"upper":
+			y = gate_y - risky_offset + sin(float(coin_index) * 1.4) * 20.0
+		"lower":
+			y = gate_y + risky_offset + sin(float(coin_index) * 1.4) * 20.0
+		"zigzag":
+			y = gate_y + (-risky_offset if coin_index % 2 == 0 else risky_offset)
+		"edge":
+			var side: float = -1.0 if int(floor(float(coin_index) / 2.0)) % 2 == 0 else 1.0
+			y = gate_y + side * risky_offset
+		_:
+			y = gate_y + sin(float(coin_index) * 1.55 - 0.6) * risky_offset
+	return Vector2(x, clampf(y, 150.0, 1770.0))
+
+func _spawn_hazard(config: Dictionary, hazard_tint: Color) -> void:
+	if world == null:
+		return
+	var hazard := HazardScript.new()
+	world.add_child(hazard)
+	hazard.setup(config, hazard_tint)
+	hazard.collided.connect(_handle_hit)
 
 func _spawn_endless_segment() -> void:
 	var config: Dictionary = LevelFactory.build_endless_segment(endless_index, daily_seed)
@@ -343,6 +417,22 @@ func _spawn_pickup(kind: String, pickup_position: Vector2) -> void:
 	world.add_child(pickup)
 	pickup.setup(kind)
 	pickup.collected.connect(_on_pickup_collected)
+
+func _apply_environment_hazards(delta: float) -> void:
+	if world == null or player == null:
+		return
+	for child in world.get_children():
+		if str(child.get_meta("entity_type", "")) == "hazard" and child.has_method("apply_to_player"):
+			child.apply_to_player(player, delta)
+
+func _environment_speed_multiplier() -> float:
+	if world == null or player == null:
+		return 1.0
+	var multiplier: float = 1.0
+	for child in world.get_children():
+		if str(child.get_meta("entity_type", "")) == "hazard" and child.has_method("speed_multiplier_for"):
+			multiplier = maxf(multiplier, float(child.speed_multiplier_for(player.global_position)))
+	return multiplier
 
 func _check_gate_passes() -> void:
 	if world == null or player == null:
@@ -361,11 +451,15 @@ func _check_gate_passes() -> void:
 func _on_gate_passed(perfect: bool) -> void:
 	if perfect:
 		combo += 1
+		_play_sfx("perfect")
+		if player != null:
+			player.trigger_perfect_visual()
 		best_combo = maxi(best_combo, combo)
 		score += 120.0 * (1.0 + float(combo) * 0.18)
 		_haptic(14)
 		if combo > 0 and combo % 5 == 0:
 			rush_time = 4.0
+			_play_sfx("rush")
 			score += 500.0
 			run_coins += 2
 	else:
@@ -379,6 +473,7 @@ func _handle_hit() -> void:
 	if state != "game" or player == null or invulnerable_time > 0.0:
 		return
 	if player.consume_shield():
+		_play_sfx("shield")
 		invulnerable_time = 1.0
 		combo = 0
 		score = maxf(0.0, score - 180.0)
@@ -386,11 +481,13 @@ func _handle_hit() -> void:
 		player.global_position.y = clampf(player.global_position.y, 150.0, 1770.0)
 		_haptic(65)
 		return
+	_play_sfx("hit")
 	_haptic(140)
 	_finish_run(false, "GRAVITY LOST")
 
 func _on_pickup_collected(kind: String, amount: int) -> void:
 	if kind == "coin":
+		_play_sfx("coin")
 		var gained: int = maxi(1, roundi(float(amount) * SaveData.coin_multiplier()))
 		run_coins += gained
 		score += 35.0 * float(gained)
@@ -398,10 +495,13 @@ func _on_pickup_collected(kind: String, amount: int) -> void:
 			daily_progress += float(gained)
 			_check_daily_completion()
 	elif kind == "magnet":
+		_play_sfx("power")
 		magnet_time = maxf(magnet_time, 7.5)
 	elif kind == "shield" and player != null:
+		_play_sfx("shield")
 		player.add_shield()
 	elif kind == "slow":
+		_play_sfx("power")
 		slow_time = maxf(slow_time, 6.0)
 	_haptic(10)
 
@@ -423,6 +523,8 @@ func _finish_run(success: bool, title: String) -> void:
 	if state != "game":
 		return
 	state = "result"
+	if success:
+		_play_sfx("win")
 	if player != null:
 		player.active = false
 	if world != null:
@@ -531,17 +633,21 @@ func _update_hud() -> void:
 		powers.append("RUSH %.1f" % rush_time)
 	power_label.text = "  •  ".join(powers)
 	if mode == "level":
-		progress_label.text = "LEVEL %d   %d / %d GATES" % [current_level, passed_gates, target_gates]
+		var zone_label: String = str(level_data.get("zone_name", LevelFactory.zone_name(current_zone_index)))
+		var challenge_label: String = str(level_data.get("challenge_name", zone_label))
+		progress_label.text = "%s • LEVEL %d   %d / %d" % [challenge_label, current_level, passed_gates, target_gates]
 	elif mode == "daily":
 		progress_label.text = "DAILY • %s   %.0f / %.0f" % [str(daily_data.get("type", "")).to_upper(), daily_progress, float(daily_data.get("target", 1))]
 	else:
 		progress_label.text = "ENDLESS   %d GATES   %.1fs" % [passed_gates, elapsed]
 
 func _buy_speed_upgrade() -> void:
+	_play_sfx("button")
 	SaveData.buy_speed_upgrade()
 	show_shop()
 
 func _skin_action(skin_id: String) -> void:
+	_play_sfx("button")
 	if SaveData.owns_skin(skin_id):
 		SaveData.select_skin(skin_id)
 	else:

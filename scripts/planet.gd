@@ -20,6 +20,7 @@ var trail_emit_accumulator: float = 0.0
 var trail_points: Array[Vector2] = []
 var trail_ages: Array[float] = []
 var last_combo_seen: int = 0
+var environment_gravity_multiplier: float = 1.0
 
 const SKINS := {
 	"terra": {"base": Color("4ad5ff"), "accent": Color("66ff9a")},
@@ -55,6 +56,7 @@ func reset_player(start_position: Vector2, new_skin_id: String) -> void:
 	trail_points.clear()
 	trail_ages.clear()
 	last_combo_seen = 0
+	environment_gravity_multiplier = 1.0
 	active = true
 	visible = true
 	queue_redraw()
@@ -72,6 +74,9 @@ func set_gravity(direction: float) -> void:
 
 func toggle_gravity() -> void:
 	set_gravity(-gravity_direction)
+
+func set_environment_gravity_multiplier(multiplier: float) -> void:
+	environment_gravity_multiplier = clampf(multiplier, 0.5, 1.85)
 
 func set_visual_speed(speed: float) -> void:
 	visual_scroll_speed = clampf(speed, 250.0, 900.0)
@@ -110,7 +115,7 @@ func _physics_process(delta: float) -> void:
 
 	var previous_y: float = global_position.y
 	velocity.x = 0.0
-	velocity.y += gravity_direction * GRAVITY_STRENGTH * delta
+	velocity.y += gravity_direction * GRAVITY_STRENGTH * environment_gravity_multiplier * delta
 	velocity.y = clampf(velocity.y, -MAX_VERTICAL_SPEED, MAX_VERTICAL_SPEED)
 	move_and_slide()
 	global_position.x = PLAYER_X
